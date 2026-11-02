@@ -1,0 +1,101 @@
+[project]
+name = "gpt-rag-orchestrator"
+version = "0.1.0"
+description = "Agent Landing Zone Orchestrator"
+requires-python = ">=3.12"
+dependencies = [
+    # Agent framework
+    "agent-framework-azure-ai==1.0.0rc6",
+    "agent-framework-azure-ai-search==1.0.0b260116",
+    "agent-framework-core==1.0.0b260116",
+    
+    # Azure SDKs
+    "azure-ai-evaluation==1.18.10",
+    "azure-ai-agents>=1.2.0b5",
+    "azure-ai-agentserver-responses==2.0.0b1",
+    "azure-ai-projects==2.0.0b3",
+    "azure-appconfiguration>=1.7.1",
+    "azure-appconfiguration-provider>=2.3.1",
+    "azure-cosmos>=4.5.1",
+    "azure-identity>=1.21.0",
+    "azure-keyvault-secrets>=4.8.0",
+    "azure-monitor-opentelemetry>=1.8.9",
+    "azure-search-documents>=11.7.0b2",
+    "azure-storage-blob>=12.25.1",
+    
+    # Web framework
+    "fastapi>=0.115.12",
+    "uvicorn>=0.34.1",
+    "python-multipart>=0.0.21",
+    "sse-starlette>=3.0.3",
+    
+    # HTTP clients
+    "aiohttp>=3.12.14",
+    "httpx>=0.28.1",
+    "httpx-sse>=0.4.3",
+    
+    # OpenTelemetry
+    "opentelemetry-api>=1.43.0",
+    "opentelemetry-sdk>=1.43.0",
+    "opentelemetry-instrumentation-fastapi>=0.64b0",
+    "opentelemetry-instrumentation-httpx>=0.64b0",
+    
+    # AI/ML
+    "openai==2.41.1",
+    "tiktoken>=0.7.0",
+    
+    # Data validation
+    "pydantic>=2.11.4",
+    "pydantic-settings>=2.12.0",
+    
+    # Database
+    "pyodbc>=5.1.0",
+    
+    # Utilities
+    "jinja2>=3.1.6",
+    "python-dotenv>=1.1.0",
+    "tenacity>=9.1.2",
+    "pyyaml>=6.0.3",
+    
+    # MCP
+    "mcp>=1.25.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "jsonschema>=4.23.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+required-version = "==0.16.5"
+
+[tool.ruff.lint]
+select = ["E722", "BLE001", "PGH003", "PGH004", "RUF100", "F821", "F822", "F823"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+explicit_package_bases = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+warn_unused_configs = true
+show_error_codes = true
+follow_imports = "normal"
+
+[[tool.mypy.overrides]]
+module = ["schemas", "connectors.types", "connectors.obo", "plugins.retrieval.retrieval_types", "plugins.nl2sql.nl2sql_types"]
+disallow_untyped_defs = true
