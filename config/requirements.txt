@@ -1,0 +1,26 @@
+# general
+
+azure-identity==1.25.3
+azure-appconfiguration==1.9.0
+
+# app container apps
+
+azure-mgmt-appcontainers==5.1.0
+
+# aifoundry
+
+azure-mgmt-cognitiveservices==13.6.0
+
+# search
+
+requests==2.34.2
+azure-keyvault-secrets==4.11.2
+jinja2==3.1.6
+
+# platform outputs contract validation
+
+jsonschema==4.23.0
+
+# application definitions
+
+PyYAML==6.0.3

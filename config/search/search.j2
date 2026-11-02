@@ -1,0 +1,557 @@
+{% set is_foundry_iq_standard_blob = RETRIEVAL_BACKEND == 'foundry_iq' and FOUNDRY_IQ_PATTERN != 'searchIndex' and FOUNDRY_IQ_CONTENT_EXTRACTION_MODE == 'standard' %}
+{% set content_understanding_chat_models = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'gpt-5.2'] %}
+{% set is_content_understanding_chat_model_supported = GPT_MODEL_INFO and GPT_MODEL_INFO.model_name in content_understanding_chat_models %}
+{% set conversation_upload_enabled = RETRIEVAL_BACKEND == 'foundry_iq' and FOUNDRY_IQ_PATTERN != 'searchIndex' and (FOUNDRY_IQ_CONVERSATION_UPLOAD_ENABLED | default('false') | string | lower) in ['true', '1', 'yes', 'y', 't'] and (FOUNDRY_IQ_CONVERSATION_KNOWLEDGE_SOURCE_NAME | default('', true)) %}
+{% set work_iq_enabled = RETRIEVAL_BACKEND == 'foundry_iq' and (WORK_IQ_ENABLED | default('false') | string | lower) in ['true', '1', 'yes', 'y', 't'] and (WORK_IQ_KNOWLEDGE_SOURCE_NAME | default('', true)) %}
+{% set fabric_iq_enabled = RETRIEVAL_BACKEND == 'foundry_iq' and (FABRIC_IQ_ENABLED | default('false') | string | lower) in ['true', '1', 'yes', 'y', 't'] and (FABRIC_IQ_KNOWLEDGE_SOURCE_NAME | default('', true)) and (FABRIC_IQ_WORKSPACE_ID | default('', true)) and (FABRIC_IQ_ONTOLOGY_ID | default('', true)) %}
+{% set fabric_data_agent_enabled = RETRIEVAL_BACKEND == 'foundry_iq' and (FABRIC_DATA_AGENT_ENABLED | default('false') | string | lower) in ['true', '1', 'yes', 'y', 't'] and (FABRIC_DATA_AGENT_KNOWLEDGE_SOURCE_NAME | default('', true)) and (FABRIC_DATA_AGENT_WORKSPACE_ID | default('', true)) and (FABRIC_DATA_AGENT_DATA_AGENT_ID | default('', true)) %}
+{% set sharepoint_indexed_enabled = RETRIEVAL_BACKEND == 'foundry_iq' and (SHAREPOINT_INDEXED_ENABLED | default('false') | string | lower) in ['true', '1', 'yes', 'y', 't'] and (SHAREPOINT_INDEXED_KNOWLEDGE_SOURCE_NAME | default('', true)) and (SHAREPOINT_INDEXED_INDEX_NAME | default('', true)) and (SHAREPOINT_INDEXED_SITE_URL | default('', true)) and (SHAREPOINT_INDEXED_TENANT_ID | default('', true)) %}
+{% set web_grounding_enabled = RETRIEVAL_BACKEND == 'foundry_iq' and (WEB_GROUNDING_ENABLED | default('false') | string | lower) in ['true', '1', 'yes', 'y', 't'] and (WEB_GROUNDING_KNOWLEDGE_SOURCE_NAME | default('', true)) %}
+{% set web_allowed_domains = [] %}
+{% for _d in (WEB_GROUNDING_ALLOWED_DOMAINS | default('', true)).replace(';', ',').replace('\n', ',').split(',') %}
+{% if _d.strip() %}{% set _ = web_allowed_domains.append(_d.strip().lower()) %}{% endif %}
+{% endfor %}
+{% set web_blocked_domains = [] %}
+{% for _d in (WEB_GROUNDING_BLOCKED_DOMAINS | default('', true)).replace(';', ',').replace('\n', ',').split(',') %}
+{% if _d.strip() %}{% set _ = web_blocked_domains.append(_d.strip().lower()) %}{% endif %}
+{% endfor %}
+{% set foundry_iq_mcp_sources = FOUNDRY_IQ_MCP_SOURCES_JSON if (FOUNDRY_IQ_MCP_SOURCES_JSON is iterable and FOUNDRY_IQ_MCP_SOURCES_JSON is not string and FOUNDRY_IQ_MCP_SOURCES_JSON is not mapping) else [] %}
+{% set foundry_iq_mcp_enabled = RETRIEVAL_BACKEND == 'foundry_iq' and (FOUNDRY_IQ_MCP_ENABLED | default('false') | string | lower) in ['true', '1', 'yes', 'y', 't'] and (foundry_iq_mcp_sources | length) > 0 %}
+{% set foundry_iq_mcp_reasoning_effort = FOUNDRY_IQ_MCP_REASONING_EFFORT | default('low', true) %}
+{
+  "indexes": [
+    {
+      "name": "{{SEARCH_RAG_INDEX_NAME}}",
+      "permissionFilterOption": "disabled",
+      "description": "RAG index for document retrieval. Contains chunked documents with content, metadata, and vectors for semantic search.",
+      "fields": [
+        { "name": "id",                             "type": "Edm.String",               "key": true,  "searchable": true,  "retrievable": true, "filterable": true, "analyzer": "keyword" },
+        { "name": "parent_id",                      "type": "Edm.String",               "searchable": false, "retrievable": true },
+        { "name": "conversationId",                 "type": "Edm.String",               "searchable": false, "retrievable": true, "filterable": true },
+        { "name": "metadata_storage_path",          "type": "Edm.String",               "searchable": false, "retrievable": true },
+        { "name": "metadata_storage_name",          "type": "Edm.String",               "searchable": false, "retrievable": true },
+        { "name": "metadata_storage_last_modified", "type": "Edm.DateTimeOffset",    "searchable": false, "retrievable": true, "sortable": true, "filterable": true },
+        { "name": "metadata_security_group_ids",    "type": "Collection(Edm.String)",   "searchable": false, "retrievable": true, "filterable": true, "permissionFilter": "groupIds" },
+        { "name": "metadata_security_user_ids",     "type": "Collection(Edm.String)",   "searchable": false, "retrievable": true, "filterable": true, "permissionFilter": "userIds" },
+        { "name": "metadata_security_rbac_scope",   "type": "Edm.String",               "searchable": false, "retrievable": true, "filterable": true, "permissionFilter": "rbacScope" },
+        {
+          "name": "custom_metadata",
+          "type": "Collection(Edm.ComplexType)",
+          "fields": [
+            { "name": "key",   "type": "Edm.String", "searchable": false, "retrievable": true, "filterable": true, "facetable": true },
+            { "name": "value", "type": "Edm.String", "searchable": true,  "retrievable": true, "filterable": true, "facetable": true }
+          ]
+        },
+        { "name": "chunk_id",                       "type": "Edm.Int32",                "searchable": false, "retrievable": true },
+        { "name": "content",                        "type": "Edm.String",               "searchable": true,  "retrievable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+        { "name": "imageCaptions",                  "type": "Edm.String",               "searchable": true,  "retrievable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+        { "name": "page",                           "type": "Edm.Int32",                "searchable": false, "retrievable": true },
+        { "name": "offset",                         "type": "Edm.Int64",                "searchable": false, "retrievable": true },
+        { "name": "length",                         "type": "Edm.Int32",                "searchable": false, "retrievable": true },
+        { "name": "title",                          "type": "Edm.String",               "searchable": true,  "retrievable": true,  "filterable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+        { "name": "category",                       "type": "Edm.String",               "searchable": true,  "retrievable": true,  "filterable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+        { "name": "filepath",                       "type": "Edm.String",               "searchable":true,   "retrievable": true,  "filterable": true, "analyzer":"standard"},
+        { "name": "url",                            "type": "Edm.String",               "searchable": false, "retrievable": true },
+        { "name": "summary",                        "type": "Edm.String",               "searchable": true,  "retrievable": true },
+        { "name": "relatedImages",                  "type": "Collection(Edm.String)",   "searchable": false, "retrievable": true },
+        { "name": "relatedFiles",                   "type": "Collection(Edm.String)",   "searchable": false, "retrievable": true },
+        { "name": "source",                         "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true },
+        { "name": "provenance_id",                  "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true },
+        { "name": "source_uri_id",                  "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true },
+        { "name": "source_version_id",              "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true },
+        { "name": "content_checksum_sha256",        "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true },
+        { "name": "ingested_at",                    "type": "Edm.DateTimeOffset",       "searchable": false, "retrievable": true,  "filterable": true, "sortable": true },
+        { "name": "ingest_run_id",                  "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true },
+        { "name": "data_classification",            "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true, "facetable": true },
+        { "name": "right_to_use",                   "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true, "facetable": true },
+        { "name": "retention_class",                "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true, "facetable": true },
+        { "name": "delete_after",                   "type": "Edm.String",               "searchable": false, "retrievable": true,  "filterable": true, "sortable": true },
+        { "name": "contentVector",                  "type": "Collection(Edm.Single)",   "searchable": true,  "retrievable": true,  "dimensions": {{EMBEDDINGS_VECTOR_DIMENSIONS}}, "vectorSearchProfile": "default" },
+        { "name": "captionVector",                  "type": "Collection(Edm.Single)",   "searchable": true,  "retrievable": true,  "dimensions": {{EMBEDDINGS_VECTOR_DIMENSIONS}}, "vectorSearchProfile": "default" }
+      ],
+      "corsOptions": {
+        "allowedOrigins": ["*"],
+        "maxAgeInSeconds": 60
+      },
+      {% if EMBEDDING_MODEL_INFO %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw", "vectorizer": "azure_openai_vectorizer" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ],
+        "vectorizers": [
+          {
+            "name": "azure_openai_vectorizer",
+            "kind": "azureOpenAI",
+            "azureOpenAIParameters": {
+              "resourceUri": "{{EMBEDDING_MODEL_INFO.endpoint}}",
+              "deploymentId": "{{EMBEDDING_MODEL_INFO.deployment_name}}",
+              "modelName": "{{EMBEDDING_MODEL_INFO.model_name}}"
+            }
+          }
+        ]
+      },
+      {% else %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ]
+      },
+      {% endif %}
+      "semantic": {
+        "defaultConfiguration": "semantic-config",
+        "configurations": [
+          {
+            "name": "semantic-config",
+            "prioritizedFields": {
+              "prioritizedContentFields": [
+                { "fieldName": "content" },
+                { "fieldName": "imageCaptions" }
+              ],
+              "prioritizedKeywordsFields": [
+                { "fieldName": "category" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "{{SEARCH_QUERIES_INDEX_NAME}}",
+      "description": "Natural language queries index for NL2SQL. Contains query examples, reasoning, and vectors for semantic query understanding.",
+      "fields": [
+        { "name": "id",            "type": "Edm.String",             "key": true },
+        { "name": "datasource",    "type": "Edm.String",             "searchable": true, "filterable": true, "retrievable": true },
+        { "name": "question",      "type": "Edm.String",             "searchable": true, "retrievable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+        { "name": "query",         "type": "Edm.String",             "searchable": false },
+        { "name": "reasoning",     "type": "Edm.String",             "searchable": true },
+        { "name": "contentVector", "type": "Collection(Edm.Single)", "searchable": true, "retrievable": true, "dimensions": {{EMBEDDINGS_VECTOR_DIMENSIONS}}, "vectorSearchProfile": "default" }
+      ],
+      "corsOptions": {
+        "allowedOrigins": ["*"],
+        "maxAgeInSeconds": 60
+      },
+      {% if EMBEDDING_MODEL_INFO %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw", "vectorizer": "azure_openai_vectorizer" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ],
+        "vectorizers": [
+          {
+            "name": "azure_openai_vectorizer",
+            "kind": "azureOpenAI",
+            "azureOpenAIParameters": {
+              "resourceUri": "{{EMBEDDING_MODEL_INFO.endpoint}}",
+              "deploymentId": "{{EMBEDDING_MODEL_INFO.deployment_name}}",
+              "modelName": "{{EMBEDDING_MODEL_INFO.model_name}}"
+            }
+          }
+        ]
+      },
+      "semantic": {
+        "defaultConfiguration": "semantic-config",
+        "configurations": [
+          {
+            "name": "semantic-config",
+            "prioritizedFields": {
+              "prioritizedContentFields": [
+                { "fieldName": "question" },
+                { "fieldName": "reasoning" }
+              ]
+            }
+          }
+        ]
+      }
+      {% else %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ]
+      }
+      {% endif %}
+    },
+    {
+      "name": "{{SEARCH_TABLES_INDEX_NAME}}",
+      "description": "Database tables metadata index for NL2SQL. Contains table schemas, column descriptions, and vectors for semantic schema understanding.",
+      "fields": [
+        { "name": "id",            "type": "Edm.String",             "key": true },
+        { "name": "table",         "type": "Edm.String",             "searchable": true, "retrievable": true },
+        { "name": "description",   "type": "Edm.String",             "searchable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+        { "name": "datasource",    "type": "Edm.String",             "searchable": true },
+        {
+          "name": "columns",
+          "type": "Collection(Edm.ComplexType)",
+          "fields": [
+            { "name": "name",        "type": "Edm.String", "searchable": true },
+            { "name": "description", "type": "Edm.String", "searchable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+            { "name": "type",        "type": "Edm.String" },
+            { "name": "examples",    "type": "Collection(Edm.String)" }
+          ]
+        },
+        { "name": "contentVector", "type": "Collection(Edm.Single)", "searchable": true, "retrievable": true, "dimensions": {{EMBEDDINGS_VECTOR_DIMENSIONS}}, "vectorSearchProfile": "default" }
+      ],
+      "corsOptions": {
+        "allowedOrigins": ["*"],
+        "maxAgeInSeconds": 60
+      },
+      {% if EMBEDDING_MODEL_INFO %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw", "vectorizer": "azure_openai_vectorizer" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ],
+        "vectorizers": [
+          {
+            "name": "azure_openai_vectorizer",
+            "kind": "azureOpenAI",
+            "azureOpenAIParameters": {
+              "resourceUri": "{{EMBEDDING_MODEL_INFO.endpoint}}",
+              "deploymentId": "{{EMBEDDING_MODEL_INFO.deployment_name}}",
+              "modelName": "{{EMBEDDING_MODEL_INFO.model_name}}"
+            }
+          }
+        ]
+      },
+      "semantic": {
+        "defaultConfiguration": "semantic-config",
+        "configurations": [
+          {
+            "name": "semantic-config",
+            "prioritizedFields": {
+              "prioritizedContentFields": [
+                { "fieldName": "description" },
+                { "fieldName": "table" }
+              ]
+            }
+          }
+        ]
+      }
+      {% else %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ]
+      }
+      {% endif %}
+    },
+    {
+      "name": "{{SEARCH_MEASURES_INDEX_NAME}}",
+      "description": "Business measures and KPIs index for NL2SQL. Contains metrics metadata and vectors for semantic understanding of business logic.",
+      "fields": [
+        { "name": "id",            "type": "Edm.String",             "key": true },
+        { "name": "datasource",    "type": "Edm.String",             "searchable": true, "filterable": true },
+        { "name": "name",          "type": "Edm.String",             "searchable": true, "filterable": true },
+        { "name": "description",   "type": "Edm.String",             "searchable": true, "analyzer": "{{SEARCH_ANALYZER_NAME}}" },
+        { "name": "type",          "type": "Edm.String",             "searchable": true, "filterable": true },
+        { "name": "source_table",  "type": "Edm.String",             "searchable": true, "filterable": true },
+        { "name": "data_type",     "type": "Edm.String",             "searchable": true },
+        { "name": "source_model",  "type": "Edm.String",             "searchable": true },
+        { "name": "contentVector", "type": "Collection(Edm.Single)", "searchable": true, "retrievable": true, "dimensions": {{EMBEDDINGS_VECTOR_DIMENSIONS}}, "vectorSearchProfile": "default" }
+      ],
+      "corsOptions": {
+        "allowedOrigins": ["*"],
+        "maxAgeInSeconds": 60
+      },
+      {% if EMBEDDING_MODEL_INFO %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw", "vectorizer": "azure_openai_vectorizer" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ],
+        "vectorizers": [
+          {
+            "name": "azure_openai_vectorizer",
+            "kind": "azureOpenAI",
+            "azureOpenAIParameters": {
+              "resourceUri": "{{EMBEDDING_MODEL_INFO.endpoint}}",
+              "deploymentId": "{{EMBEDDING_MODEL_INFO.deployment_name}}",
+              "modelName": "{{EMBEDDING_MODEL_INFO.model_name}}"
+            }
+          }
+        ]
+      },
+      "semantic": {
+        "defaultConfiguration": "semantic-config",
+        "configurations": [
+          {
+            "name": "semantic-config",
+            "prioritizedFields": {
+              "prioritizedContentFields": [
+                { "fieldName": "description" },
+                { "fieldName": "name" }
+              ]
+            }
+          }
+        ]
+      }
+      {% else %}
+      "vectorSearch": {
+        "profiles": [
+          { "name": "default", "algorithm": "hnsw" }
+        ],
+        "algorithms": [
+          {
+            "name": "hnsw",
+            "kind": "hnsw",
+            "hnswParameters": { "m": 4, "efConstruction": 400, "efSearch": 500, "metric": "cosine" }
+          }
+        ]
+      }
+      {% endif %}
+    }
+  ],
+  "datasources": [],
+  "skillsets": [],
+  "indexers": [],
+  "knowledgeSources": {% if RETRIEVAL_BACKEND == 'foundry_iq' %}[
+    {% if FOUNDRY_IQ_PATTERN == 'searchIndex' %}
+    {
+      "name": "{{FOUNDRY_IQ_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "searchIndex",
+      "description": "RAG documents knowledge source (searchIndex)",
+      "encryptionKey": null,
+      "searchIndexParameters": {
+        "searchIndexName": "{{SEARCH_RAG_INDEX_NAME}}",
+        "semanticConfigurationName": "semantic-config",
+        "sourceDataFields": [
+          { "name": "metadata_storage_name" },
+          { "name": "metadata_storage_path" },
+          { "name": "filepath" },
+          { "name": "page" },
+          { "name": "title" },
+          { "name": "category" },
+          { "name": "url" }
+        ],
+        "searchFields": [
+          { "name": "*" }
+        ]
+      }
+    }
+    {% else %}
+    {
+      "name": "{{FOUNDRY_IQ_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "azureBlob",
+      "description": "RAG documents knowledge source (native Azure Blob Storage ingestion)",
+      "encryptionKey": null,
+      "azureBlobParameters": {
+        "connectionString": "ResourceId={{STORAGE_ACCOUNT_RESOURCE_ID}}",
+        "containerName": "{{FOUNDRY_IQ_STORAGE_CONTAINER_NAME}}",
+        "folderPath": {% if FOUNDRY_IQ_STORAGE_FOLDER_PATH %}"{{FOUNDRY_IQ_STORAGE_FOLDER_PATH}}"{% else %}null{% endif %},
+        "isADLSGen2": {{FOUNDRY_IQ_IS_ADLS_GEN2 | lower}},
+        "ingestionParameters": {
+          "identity": {% if SEARCH_SERVICE_UAI_RESOURCE_ID is defined and SEARCH_SERVICE_UAI_RESOURCE_ID %}{
+            "@odata.type": "#Microsoft.Azure.Search.DataUserAssignedIdentity",
+            "userAssignedIdentity": "{{SEARCH_SERVICE_UAI_RESOURCE_ID}}"
+          }{% else %}null{% endif %},
+          "disableImageVerbalization": false,
+          "chatCompletionModel": {% if is_foundry_iq_standard_blob and is_content_understanding_chat_model_supported %}{
+            "kind": "azureOpenAI",
+            "azureOpenAIParameters": {
+              "resourceUri": "{{FOUNDRY_IQ_AI_SERVICES_ENDPOINT}}",
+              "deploymentId": "{{GPT_MODEL_INFO.deployment_name}}",
+              "modelName": "{{GPT_MODEL_INFO.model_name}}"
+            }
+          }{% else %}null{% endif %},
+          "embeddingModel": {% if EMBEDDING_MODEL_INFO %}{
+            "kind": "azureOpenAI",
+            "azureOpenAIParameters": {
+              "resourceUri": "{{EMBEDDING_MODEL_INFO.endpoint}}",
+              "deploymentId": "{{EMBEDDING_MODEL_INFO.deployment_name}}",
+              "modelName": "{{EMBEDDING_MODEL_INFO.model_name}}"
+            }
+          }{% else %}null{% endif %},
+          "contentExtractionMode": "{{FOUNDRY_IQ_CONTENT_EXTRACTION_MODE}}",
+          "ingestionSchedule": null,
+          "ingestionPermissionOptions": {{FOUNDRY_IQ_INGESTION_PERMISSION_OPTIONS | tojson}}{% if is_foundry_iq_standard_blob %},
+          "aiServices": {
+            "uri": "{{FOUNDRY_IQ_AI_SERVICES_ENDPOINT}}"
+          }{% endif %}
+        }
+      }
+    }
+    {% endif %}
+    {% if conversation_upload_enabled %},
+    {
+      "name": "{{FOUNDRY_IQ_CONVERSATION_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "searchIndex",
+      "description": "Conversational file upload knowledge source (searchIndex over RAG index, scoped per conversation at query time)",
+      "encryptionKey": null,
+      "searchIndexParameters": {
+        "searchIndexName": "{{SEARCH_RAG_INDEX_NAME}}",
+        "semanticConfigurationName": "semantic-config",
+        "sourceDataFields": [
+          { "name": "metadata_storage_name" },
+          { "name": "metadata_storage_path" },
+          { "name": "filepath" },
+          { "name": "page" },
+          { "name": "title" },
+          { "name": "category" },
+          { "name": "url" }
+        ],
+        "searchFields": [
+          { "name": "*" }
+        ]
+      }
+    }
+    {% endif %}
+    {% if work_iq_enabled %},
+    {
+      "name": "{{WORK_IQ_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "workIQ",
+      "description": "Microsoft 365 Work IQ knowledge source (grounds retrieval on the signed-in user's Microsoft 365 context).",
+      "encryptionKey": null
+    }
+    {% endif %}
+    {% if fabric_iq_enabled %},
+    {
+      "name": "{{FABRIC_IQ_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "fabricOntology",
+      "description": "Microsoft Fabric IQ knowledge source (grounds retrieval on a Fabric ontology in the caller's workspace).",
+      "fabricOntologyParameters": {
+        "workspaceId": "{{FABRIC_IQ_WORKSPACE_ID}}",
+        "ontologyId": "{{FABRIC_IQ_ONTOLOGY_ID}}"
+      },
+      "encryptionKey": null
+    }
+    {% endif %}
+    {% if fabric_data_agent_enabled %},
+    {
+      "name": "{{FABRIC_DATA_AGENT_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "fabricDataAgent",
+      "description": "Microsoft Fabric Data Agent knowledge source (queries a Fabric Data Agent in the caller's workspace).",
+      "fabricDataAgentParameters": {
+        "workspaceId": "{{FABRIC_DATA_AGENT_WORKSPACE_ID}}",
+        "dataAgentId": "{{FABRIC_DATA_AGENT_DATA_AGENT_ID}}"
+      },
+      "encryptionKey": null
+    }
+    {% endif %}
+    {% if sharepoint_indexed_enabled %},
+    {
+      "name": "{{SHAREPOINT_INDEXED_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "indexedSharePoint",
+      "description": "SharePoint Indexed knowledge source (grounds retrieval on a pre-built AI Search index of a SharePoint site via Microsoft Graph app-only auth).",
+      "indexedSharePointParameters": {
+        "indexName": "{{SHAREPOINT_INDEXED_INDEX_NAME}}",
+        "siteUrl": "{{SHAREPOINT_INDEXED_SITE_URL}}",
+        "tenantId": "{{SHAREPOINT_INDEXED_TENANT_ID}}"
+      },
+      "encryptionKey": null
+    }
+    {% endif %}
+    {% if web_grounding_enabled %},
+    {
+      "name": "{{WEB_GROUNDING_KNOWLEDGE_SOURCE_NAME}}",
+      "kind": "web",
+      "description": "Web grounding knowledge source (Grounding with Bing over the public internet).",
+      "webParameters": {
+        "domains": {
+          "allowedDomains": {{ web_allowed_domains | tojson }},
+          "blockedDomains": {{ web_blocked_domains | tojson }}
+        }
+      },
+      "encryptionKey": null
+    }
+    {% endif %}
+    {% if foundry_iq_mcp_enabled %}
+    {% for mcp_src in foundry_iq_mcp_sources %},
+    {
+      "name": {{ mcp_src.name | tojson }},
+      "kind": "mcpServer",
+      "description": {{ (mcp_src.description | default('MCP server knowledge source (' ~ mcp_src.name ~ ').', true)) | tojson }},
+      "mcpServerParameters": {
+        "serverURL": {{ mcp_src.serverURL | tojson }},
+        "tools": [
+          {% for tool in mcp_src.tools %}{% if not loop.first %},{% endif %}
+          {
+            "name": {{ tool.name | tojson }},
+            "outputParsing": {{ tool.outputParsing | tojson }},
+            "inclusionMode": {{ tool.inclusionMode | tojson }},
+            "maxOutputTokens": {{ tool.maxOutputTokens }}
+          }
+          {% endfor %}
+        ]
+      },
+      "encryptionKey": null
+    }
+    {% endfor %}
+    {% endif %}
+  ]{% else %}[]{% endif %},
+  "knowledgeBases": {% if RETRIEVAL_BACKEND == 'foundry_iq' %}[
+    {
+      "name": "{{KNOWLEDGE_BASE_NAME}}",
+      "description": "Knowledge base for RAG grounded retrieval.",
+      "retrievalInstructions": null,
+      "answerInstructions": null,
+      "outputMode": "extractiveData",
+      "knowledgeSources": [
+        { "name": "{{FOUNDRY_IQ_KNOWLEDGE_SOURCE_NAME}}" }{% if conversation_upload_enabled %},
+        { "name": "{{FOUNDRY_IQ_CONVERSATION_KNOWLEDGE_SOURCE_NAME}}" }{% endif %}{% if work_iq_enabled %},
+        { "name": "{{WORK_IQ_KNOWLEDGE_SOURCE_NAME}}" }{% endif %}{% if fabric_iq_enabled %},
+        { "name": "{{FABRIC_IQ_KNOWLEDGE_SOURCE_NAME}}" }{% endif %}{% if fabric_data_agent_enabled %},
+        { "name": "{{FABRIC_DATA_AGENT_KNOWLEDGE_SOURCE_NAME}}" }{% endif %}{% if sharepoint_indexed_enabled %},
+        { "name": "{{SHAREPOINT_INDEXED_KNOWLEDGE_SOURCE_NAME}}" }{% endif %}{% if web_grounding_enabled %},
+        { "name": "{{WEB_GROUNDING_KNOWLEDGE_SOURCE_NAME}}" }{% endif %}{% if foundry_iq_mcp_enabled %}{% for mcp_src in foundry_iq_mcp_sources %},
+        { "name": {{ mcp_src.name | tojson }} }{% endfor %}{% endif %}
+      ],
+      "models": {% if foundry_iq_mcp_enabled %}[
+        {
+          "kind": "azureOpenAI",
+          "azureOpenAIParameters": {
+            "resourceUri": "{{FOUNDRY_IQ_AI_SERVICES_ENDPOINT}}",
+            "deploymentId": "{{GPT_MODEL_INFO.deployment_name}}",
+            "modelName": "{{GPT_MODEL_INFO.model_name}}"
+          }
+        }
+      ]{% else %}[]{% endif %},
+      "encryptionKey": null,
+      "retrievalReasoningEffort": { "kind": "{% if foundry_iq_mcp_enabled %}{{foundry_iq_mcp_reasoning_effort}}{% else %}minimal{% endif %}" }
+    }
+  ]{% else %}[]{% endif %}
+}

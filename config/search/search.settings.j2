@@ -1,0 +1,70 @@
+{% set search_rag_index_name = SEARCH_RAG_INDEX_NAME | default('ragindex-' ~ RESOURCE_TOKEN, true) %}
+{% set foundry_iq_pattern = FOUNDRY_IQ_PATTERN | default('azureBlob', true) %}
+{% set foundry_iq_ai_services_endpoint = FOUNDRY_IQ_AI_SERVICES_ENDPOINT | default('', true) %}
+{% if not foundry_iq_ai_services_endpoint and AI_FOUNDRY_PROJECT_ENDPOINT is defined and AI_FOUNDRY_PROJECT_ENDPOINT %}
+{% set foundry_iq_ai_services_endpoint = AI_FOUNDRY_PROJECT_ENDPOINT.split('/api/projects/')[0].rstrip('/') ~ '/' %}
+{% endif %}
+{% if not foundry_iq_ai_services_endpoint and AI_FOUNDRY_ACCOUNT_NAME is defined and AI_FOUNDRY_ACCOUNT_NAME %}
+{% set foundry_iq_ai_services_endpoint = 'https://' ~ AI_FOUNDRY_ACCOUNT_NAME ~ '.services.ai.azure.com/' %}
+{% endif %}
+{
+    "SEARCH_API_VERSION": "2025-05-01-preview",
+    "SEARCH_ANALYZER_NAME": "standard.lucene",
+    "EMBEDDINGS_VECTOR_DIMENSIONS": "3072",
+    "SEARCH_RAG_INDEX_NAME": "{{search_rag_index_name}}",
+    "SEARCH_QUERIES_INDEX_NAME": "nl2sql-{{RESOURCE_TOKEN}}-queries",
+    "SEARCH_TABLES_INDEX_NAME": "nl2sql-{{RESOURCE_TOKEN}}-tables",
+    "SEARCH_MEASURES_INDEX_NAME": "nl2sql-{{RESOURCE_TOKEN}}-measures",
+    "ENABLE_AGENTIC_RETRIEVAL": "{{ENABLE_AGENTIC_RETRIEVAL | default('false')}}",
+    "RETRIEVAL_BACKEND": "{{RETRIEVAL_BACKEND | default('ai_search')}}",
+    "FOUNDRY_IQ_PATTERN": "{{foundry_iq_pattern}}",
+    "KNOWLEDGE_BASE_NAME": "{{KNOWLEDGE_BASE_NAME | default(search_rag_index_name ~ '-rag-kb', true)}}",
+    "KNOWLEDGE_BASE_ENDPOINT": "{{KNOWLEDGE_BASE_ENDPOINT | default(SEARCH_SERVICE_QUERY_ENDPOINT)}}",
+    "KNOWLEDGE_BASE_CONNECTION_ID": "{{KNOWLEDGE_BASE_CONNECTION_ID | default('')}}",
+    "FOUNDRY_IQ_API_VERSION": "{{FOUNDRY_IQ_API_VERSION | default('2026-05-01-preview')}}",
+    "FOUNDRY_IQ_KNOWLEDGE_RETRIEVAL_BILLING_PLAN": "{{FOUNDRY_IQ_KNOWLEDGE_RETRIEVAL_BILLING_PLAN | default('free')}}",
+    "FOUNDRY_IQ_KNOWLEDGE_SOURCE_NAME": "{{FOUNDRY_IQ_KNOWLEDGE_SOURCE_NAME | default(search_rag_index_name ~ ('-rag-ks' if foundry_iq_pattern == 'searchIndex' else '-blob-ks'), true)}}",
+    "FOUNDRY_IQ_KNOWLEDGE_SOURCE_KIND": "{{FOUNDRY_IQ_KNOWLEDGE_SOURCE_KIND | default('searchIndex' if foundry_iq_pattern == 'searchIndex' else 'azureBlob', true)}}",
+    "FOUNDRY_IQ_CONVERSATION_UPLOAD_ENABLED": "{{FOUNDRY_IQ_CONVERSATION_UPLOAD_ENABLED | default('false')}}",
+    "FOUNDRY_IQ_CONVERSATION_KNOWLEDGE_SOURCE_NAME": "{{FOUNDRY_IQ_CONVERSATION_KNOWLEDGE_SOURCE_NAME | default(search_rag_index_name ~ '-conv-ks', true)}}",
+    "FOUNDRY_IQ_STORAGE_CONTAINER_NAME": "{{FOUNDRY_IQ_STORAGE_CONTAINER_NAME | default('documents')}}",
+    "FOUNDRY_IQ_STORAGE_FOLDER_PATH": "{{FOUNDRY_IQ_STORAGE_FOLDER_PATH | default('')}}",
+    "FOUNDRY_IQ_IS_ADLS_GEN2": "{{FOUNDRY_IQ_IS_ADLS_GEN2 | default('false')}}",
+    "FOUNDRY_IQ_CONTENT_EXTRACTION_MODE": "{{FOUNDRY_IQ_CONTENT_EXTRACTION_MODE | default('standard')}}",
+    "FOUNDRY_IQ_AI_SERVICES_ENDPOINT": "{{foundry_iq_ai_services_endpoint}}",
+    "FOUNDRY_IQ_INGESTION_PERMISSION_OPTIONS": {{FOUNDRY_IQ_INGESTION_PERMISSION_OPTIONS | default(['rbacScope']) | tojson}},
+    "FOUNDRY_IQ_FILTER_ADD_ON_ENABLED": "{{FOUNDRY_IQ_FILTER_ADD_ON_ENABLED | default('false')}}",
+    "FOUNDRY_IQ_SECURITY_FIELD_NAME": "{{FOUNDRY_IQ_SECURITY_FIELD_NAME | default('metadata_security_id')}}",
+    "FOUNDRY_IQ_MAX_OUTPUT_DOCUMENTS": "{{FOUNDRY_IQ_MAX_OUTPUT_DOCUMENTS | default('')}}",
+    "WORK_IQ_ENABLED": "{{WORK_IQ_ENABLED | default('false')}}",
+    "WORK_IQ_KNOWLEDGE_SOURCE_NAME": "{{WORK_IQ_KNOWLEDGE_SOURCE_NAME | default('')}}",
+    "FABRIC_IQ_ENABLED": "{{FABRIC_IQ_ENABLED | default('false')}}",
+    "FABRIC_IQ_KNOWLEDGE_SOURCE_NAME": "{{FABRIC_IQ_KNOWLEDGE_SOURCE_NAME | default('')}}",
+    "FABRIC_IQ_WORKSPACE_ID": "{{FABRIC_IQ_WORKSPACE_ID | default('')}}",
+    "FABRIC_IQ_ONTOLOGY_ID": "{{FABRIC_IQ_ONTOLOGY_ID | default('')}}",
+    "FABRIC_DATA_AGENT_ENABLED": "{{FABRIC_DATA_AGENT_ENABLED | default('false')}}",
+    "FABRIC_DATA_AGENT_KNOWLEDGE_SOURCE_NAME": "{{FABRIC_DATA_AGENT_KNOWLEDGE_SOURCE_NAME | default('')}}",
+    "FABRIC_DATA_AGENT_WORKSPACE_ID": "{{FABRIC_DATA_AGENT_WORKSPACE_ID | default('')}}",
+    "FABRIC_DATA_AGENT_DATA_AGENT_ID": "{{FABRIC_DATA_AGENT_DATA_AGENT_ID | default('')}}",
+    "SHAREPOINT_INDEXED_ENABLED": "{{SHAREPOINT_INDEXED_ENABLED | default('false')}}",
+    "SHAREPOINT_INDEXED_KNOWLEDGE_SOURCE_NAME": "{{SHAREPOINT_INDEXED_KNOWLEDGE_SOURCE_NAME | default('')}}",
+    "SHAREPOINT_INDEXED_INDEX_NAME": "{{SHAREPOINT_INDEXED_INDEX_NAME | default('')}}",
+    "SHAREPOINT_INDEXED_SITE_URL": "{{SHAREPOINT_INDEXED_SITE_URL | default('')}}",
+    "SHAREPOINT_INDEXED_TENANT_ID": "{{SHAREPOINT_INDEXED_TENANT_ID | default('')}}",
+    "WEB_GROUNDING_ENABLED": "{{WEB_GROUNDING_ENABLED | default('false')}}",
+    "WEB_GROUNDING_KNOWLEDGE_SOURCE_NAME": "{{WEB_GROUNDING_KNOWLEDGE_SOURCE_NAME | default('')}}",
+    "WEB_GROUNDING_ALLOWED_DOMAINS": "{{WEB_GROUNDING_ALLOWED_DOMAINS | default('')}}",
+    "WEB_GROUNDING_BLOCKED_DOMAINS": "{{WEB_GROUNDING_BLOCKED_DOMAINS | default('')}}",
+    "FOUNDRY_IQ_MCP_ENABLED": "{{FOUNDRY_IQ_MCP_ENABLED | default('false')}}",
+    "FOUNDRY_IQ_MCP_SOURCES_JSON": {{FOUNDRY_IQ_MCP_SOURCES_JSON | default([]) | tojson}},
+    "FOUNDRY_IQ_MCP_REASONING_EFFORT": "{{FOUNDRY_IQ_MCP_REASONING_EFFORT | default('low')}}",
+    "FOUNDRY_IQ_MCP_TRUSTED_HOSTS": "{{FOUNDRY_IQ_MCP_TRUSTED_HOSTS | default('')}}",
+    "FOUNDRY_IQ_MCP_LOG_TOOL_ARGUMENTS": "{{FOUNDRY_IQ_MCP_LOG_TOOL_ARGUMENTS | default('false')}}",
+    {% if GPT_MODEL_INFO | default({}) %}
+    "GPT_MODEL_DEPLOYMENT_NAME": "{{GPT_MODEL_INFO.deployment_name}}",
+    "GPT_MODEL_NAME": "{{GPT_MODEL_INFO.model_name}}"
+    {% else %}
+    "GPT_MODEL_DEPLOYMENT_NAME": "",
+    "GPT_MODEL_NAME": ""
+    {% endif %}
+}

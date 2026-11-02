@@ -1,0 +1,31 @@
+{
+  "tag": "v4.3.0",
+  "repo": "https://github.com/Azure/agent-landing-zone.git",
+  "infra": {
+    "source": {
+      "repo": "https://github.com/Azure/bicep-ptn-aiml-landing-zone.git",
+      "tag": "v2.7.3",
+      "commit": "97e2375b89dcda4900d75aac9e7ffb7b20cce165"
+    }
+  },
+  "components": [
+    {
+      "name": "agent-app-ui",
+      "repo": "https://github.com/Azure/agent-app-ui.git",
+      "tag": "v3.3.0",
+      "commit": "858ed4205d866b7bfbff43ca9ed20ab812baa24e"
+    },
+    {
+      "name": "agent-app-orchestrator",
+      "repo": "https://github.com/Azure/agent-app-orchestrator.git",
+      "tag": "v5.2.1",
+      "commit": "27f952fcf8d48a2ba6267c237ea6bea8361fedd2"
+    },
+    {
+      "name": "agent-app-ingestion",
+      "repo": "https://github.com/Azure/agent-app-ingestion.git",
+      "tag": "v3.1.1",
+      "commit": "72efd8d7d51e10d38bf8b89f03b7eb42e1ed8ff2"
+    }
+  ]
+}
