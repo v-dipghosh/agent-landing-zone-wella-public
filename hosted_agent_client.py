@@ -1,0 +1,25 @@
+"""Compatibility exports; implementation lives in gpt_rag_ui.clients.hosted_agent_client."""
+
+from gpt_rag_ui.clients.hosted_agent_client import (
+    AsyncCredential as AsyncCredential,
+    DEFAULT_SSE_IDLE_TIMEOUT_SECONDS as DEFAULT_SSE_IDLE_TIMEOUT_SECONDS,
+    HostedAgentAuthMode as HostedAgentAuthMode,
+    HostedAgentAuthenticationError as HostedAgentAuthenticationError,
+    HostedAgentCancelledError as HostedAgentCancelledError,
+    HostedAgentClient as HostedAgentClient,
+    HostedAgentConfigError as HostedAgentConfigError,
+    HostedAgentError as HostedAgentError,
+    HostedAgentEvent as HostedAgentEvent,
+    HostedAgentHTTPError as HostedAgentHTTPError,
+    HostedAgentProtocolError as HostedAgentProtocolError,
+    HostedAgentResponseError as HostedAgentResponseError,
+    HostedAgentSettings as HostedAgentSettings,
+    InvocationMessage as InvocationMessage,
+    acquire_obo_token as acquire_obo_token,
+    acquire_service_identity_token as acquire_service_identity_token,
+    build_invocation_messages as build_invocation_messages,
+    call_hosted_agent_stream as call_hosted_agent_stream,
+    close_hosted_agent_client as close_hosted_agent_client,
+    load_hosted_agent_settings as load_hosted_agent_settings,
+    validate_hosted_agent_config as validate_hosted_agent_config,
+)
